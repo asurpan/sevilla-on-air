@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "tsx server.ts",
-    "build": "npm install"
+    "start": "tsx server.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
