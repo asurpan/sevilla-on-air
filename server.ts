@@ -9,8 +9,9 @@ const app = express();
 const server = createServer(app);
 
 // Render asigna el puerto mediante variable de entorno
-const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 10000;
 
+// Definición de clientes
 const clients = new Map<WebSocket, { id: string; username: string; channel: number; subtone: string; isTalking: boolean }>();
 
 // 1. WebSocket Server
@@ -46,17 +47,19 @@ wss.on("connection", (ws) => {
           broadcastState();
         }
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Error procesando mensaje:", e); }
   });
   ws.on("close", () => { clients.delete(ws); broadcastState(); });
 });
 
-// 2. Servir archivos estáticos desde la raíz (donde está index.html)
-app.use(express.static(process.cwd()));
+// 2. Servir archivos estáticos desde la raíz
+// Usamos path.resolve(process.cwd()) para asegurar una ruta absoluta correcta
+const rootDir = process.cwd();
+app.use(express.static(rootDir));
 
-// Ruta comodín para que el frontend maneje el routing
+// Ruta comodín para enviar siempre index.html (SPA)
 app.get("*", (req, res) => {
-  res.sendFile(path.join(process.cwd(), "index.html"));
+  res.sendFile(path.resolve(rootDir, "index.html"));
 });
 
 // 3. Inicio del servidor
