@@ -6,18 +6,6 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
     outDir: 'dist',
-    emptyOutDir: false,
-    rollupOptions: {
-      external: [
-        'express',
-        'ws',
-        'dotenv',
-        '@google/genai',
-        'fsevents',
-        'path',
-        'fs',
-        'url'
-      ]
-    }
+    emptyOutDir: false
   }
 });
