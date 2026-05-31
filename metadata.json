@@ -1,0 +1,6 @@
+{
+  "name": "SEVILLA ON AIR",
+  "description": "La red de ondas de voz real de Sevilla. Emisora virtual de radioaficionado de 40 canales con PTT, squelch, escaneador, subtonos privados y manos libres.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
