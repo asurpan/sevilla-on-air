@@ -5,10 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && mkdir -p api && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --external:fsevents --sourcemap --outfile=api/server.js",
-    "start": "node api/server.js",
-    "clean": "rm -rf dist api",
-    "lint": "tsc --noEmit"
+    "build": "vite build",
+    "start": "tsx server.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -31,7 +29,6 @@
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "typescript": "~5.8.2"
   }
 }
