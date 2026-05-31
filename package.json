@@ -1,3 +1,13 @@
-"scripts": {
-  "start": "tsx server.ts"
+{
+  "name": "sevilla-on-air",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx server.ts"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "tsx": "^4.21.0",
+    "ws": "^8.21.0"
+  }
 }
