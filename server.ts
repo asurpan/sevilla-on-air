@@ -2,62 +2,55 @@ import express from "express";
 import path from "path";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { createServer as createViteServer } from "vite";
+import { fileURLToPath } from "url";
 
-async function startServer() {
-  const app = express();
-  const server = createServer(app);
-  const PORT = 3000;
+// 1. Correcciones de entorno y rutas
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const app = express();
+const server = createServer(app);
+const PORT = Number(process.env.PORT) || 3000;
 
-  // Track connected users
-  // Map of client sockets to user metadata
-  const clients = new Map<WebSocket, {
-    id: string;
-    username: string;
-    channel: number;
-    subtone: string;
-    isTalking: boolean;
-  }>();
+// Tipado más limpio
+interface User {
+  id: string;
+  username: string;
+  channel: number;
+  subtone: string;
+  isTalking: boolean;
+}
 
-  // Create WebSocket server attached to the HTTP server
-  const wss = new WebSocketServer({ noServer: true });
+const clients = new Map<WebSocket, User>();
 
-  server.on("upgrade", (request, socket, head) => {
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit("connection", ws, request);
-    });
+// 2. WebSocket Server optimizado
+const wss = new WebSocketServer({ server }); // Conectado directamente al server
+
+// Broadcast optimizado: evitar iterar innecesariamente
+const broadcastState = () => {
+  const usersList: Record<string, Omit<User, 'id'>> = {};
+  clients.forEach((user) => {
+    usersList[user.id] = {
+      username: user.username,
+      channel: user.channel,
+      subtone: user.subtone,
+      isTalking: user.isTalking
+    };
   });
 
-  // Broadcast function
-  const broadcastState = () => {
-    const usersList: { [id: string]: { username: string; channel: number; subtone: string; isTalking: boolean } } = {};
-    clients.forEach((user) => {
-      usersList[user.id] = {
-        username: user.username,
-        channel: user.channel,
-        subtone: user.subtone,
-        isTalking: user.isTalking
-      };
-    });
+  const stateMessage = JSON.stringify({ type: "state", users: usersList });
+  
+  for (const [ws] of clients) {
+    if (ws.readyState === WebSocket.OPEN) ws.send(stateMessage);
+  }
+};
 
-    const stateMessage = JSON.stringify({
-      type: "state",
-      users: usersList
-    });
+wss.on("connection", (ws) => {
+  ws.on("message", (message) => {
+    try {
+      const payload = JSON.parse(message.toString());
+      const user = clients.get(ws);
 
-    clients.forEach((_, ws) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(stateMessage);
-      }
-    });
-  };
-
-  wss.on("connection", (ws) => {
-    ws.on("message", (message) => {
-      try {
-        const payload = JSON.parse(message.toString());
-
-        if (payload.type === "join") {
+      switch (payload.type) {
+        case "join":
           clients.set(ws, {
             id: payload.userId,
             username: payload.username,
@@ -66,115 +59,59 @@ async function startServer() {
             isTalking: false
           });
           broadcastState();
-        } else if (payload.type === "state_update") {
-          const user = clients.get(ws);
-          if (user) {
-            user.username = payload.username;
-            user.channel = payload.channel;
-            user.subtone = payload.subtone;
-            broadcastState();
-          }
-        } else if (payload.type === "talking_start") {
-          const user = clients.get(ws);
-          if (user) {
-            user.isTalking = true;
-            // Broadcast talking state change
-            broadcastState();
-            // Also forward specific talking action
-            clients.forEach((otherUser, otherWs) => {
-              if (otherWs !== ws && otherWs.readyState === WebSocket.OPEN) {
-                if (otherUser.channel === user.channel && otherUser.subtone === user.subtone) {
-                  otherWs.send(JSON.stringify({
-                    type: "talking_start",
-                    userId: user.id,
-                    username: user.username,
-                    channel: user.channel,
-                    subtone: user.subtone
-                  }));
-                }
-              }
-            });
-          }
-        } else if (payload.type === "talking_stop") {
-          const user = clients.get(ws);
-          if (user) {
-            user.isTalking = false;
-            // Broadcast talking state change
-            broadcastState();
-            // Also forward stop action
-            clients.forEach((otherUser, otherWs) => {
-              if (otherWs !== ws && otherWs.readyState === WebSocket.OPEN) {
-                if (otherUser.channel === user.channel && otherUser.subtone === user.subtone) {
-                  otherWs.send(JSON.stringify({
-                    type: "talking_stop",
-                    userId: user.id,
-                    username: user.username,
-                    channel: user.channel,
-                    subtone: user.subtone
-                  }));
-                }
-              }
-            });
-          }
-        } else if (payload.type === "audio") {
-          const user = clients.get(ws);
-          if (user && user.isTalking) {
-            // Forward audio to all OTHER users on the same channel + subtone
-            const audioMsg = JSON.stringify({
-              type: "audio",
-              userId: user.id,
-              username: user.username,
-              channel: user.channel,
-              subtone: user.subtone,
-              samples: payload.samples
-            });
+          break;
 
+        case "state_update":
+          if (user) {
+            Object.assign(user, { username: payload.username, channel: payload.channel, subtone: payload.subtone });
+            broadcastState();
+          }
+          break;
+
+        case "talking_start":
+        case "talking_stop":
+          if (user) {
+            user.isTalking = payload.type === "talking_start";
+            broadcastState();
+            // Forward directo a pares
             clients.forEach((otherUser, otherWs) => {
-              if (otherWs !== ws && otherWs.readyState === WebSocket.OPEN) {
-                if (otherUser.channel === user.channel && otherUser.subtone === user.subtone) {
-                  otherWs.send(audioMsg);
-                }
+              if (otherWs !== ws && otherUser.channel === user.channel && otherUser.subtone === user.subtone) {
+                otherWs.send(JSON.stringify({ ...payload, userId: user.id }));
               }
             });
           }
-        }
-      } catch (err) {
-        console.error("Error processing message:", err);
+          break;
+
+        case "audio":
+          if (user?.isTalking) {
+            const audioMsg = JSON.stringify({ ...payload, userId: user.id });
+            clients.forEach((otherUser, otherWs) => {
+              if (otherWs !== ws && otherUser.channel === user.channel && otherUser.subtone === user.subtone) {
+                otherWs.send(audioMsg);
+              }
+            });
+          }
+          break;
       }
-    });
-
-    ws.on("close", () => {
-      const user = clients.get(ws);
-      if (user) {
-        clients.delete(ws);
-        broadcastState();
-      }
-    });
+    } catch (err) {
+      console.error("Socket error:", err);
+    }
   });
 
-  // Express API endpoints
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
+  ws.on("close", () => {
+    if (clients.has(ws)) {
+      clients.delete(ws);
+      broadcastState();
+    }
   });
+});
 
-  // Integrate Vite as middleware
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
-
-  server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Express and WebSocket server running on http://localhost:${PORT}`);
-  });
+// 3. Servir frontend (Producción robusta)
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(path.join(__dirname, "dist")));
+  app.get("*", (req, res) => res.sendFile(path.join(__dirname, "dist", "index.html")));
 }
 
-startServer();
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+});
