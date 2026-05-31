@@ -52,7 +52,7 @@ wss.on("connection", (ws) => {
 });
 
 // 2. Servir archivos estáticos (LA SOLUCIÓN AL "NOT FOUND")
-const distPath = path.join(__dirname, "dist");
+const distPath = path.join(process.cwd(), "dist");
 app.use(express.static(distPath));
 
 // Ruta comodín para que el frontend (React/Vite) maneje el routing
