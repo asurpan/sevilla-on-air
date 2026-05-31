@@ -8,7 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const server = createServer(app);
 
-// IMPORTANTE: Render asigna el puerto mediante variable de entorno
+// Render asigna el puerto mediante variable de entorno
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
 const clients = new Map<WebSocket, { id: string; username: string; channel: number; subtone: string; isTalking: boolean }>();
@@ -51,13 +51,12 @@ wss.on("connection", (ws) => {
   ws.on("close", () => { clients.delete(ws); broadcastState(); });
 });
 
-// 2. Servir archivos estáticos (LA SOLUCIÓN AL "NOT FOUND")
-const distPath = path.join(process.cwd(), "dist");
-app.use(express.static(distPath));
+// 2. Servir archivos estáticos desde la raíz (donde está index.html)
+app.use(express.static(process.cwd()));
 
-// Ruta comodín para que el frontend (React/Vite) maneje el routing
+// Ruta comodín para que el frontend maneje el routing
 app.get("*", (req, res) => {
-  res.sendFile(path.join(distPath, "index.html"));
+  res.sendFile(path.join(process.cwd(), "index.html"));
 });
 
 // 3. Inicio del servidor
